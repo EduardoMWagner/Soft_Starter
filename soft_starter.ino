@@ -7,8 +7,6 @@ const int bypassPin = 19;     // Pino para o bypass
 const int emergencyPin = 18;  // Pino para o relé de emergência
 const int led = 21;
 volatile bool zeroCrossDetected = false;
-bool generatingPositivePulse = true;
-bool generatingNegativePulse = false;
 
 int estado = 1;
 int pulseWidth = 600;          // Largura do pulso PPM em microssegundos (inicialmente 600us)
@@ -65,6 +63,7 @@ void loop()
       if (decelTime < 5) decelTime = 5;
     } else if (input == 's') { // Acelerar
       accelerating = true;
+      posicao = 7000;
       diminue = false; // Interrompe a desaceleração quando 's' é pressionado
     } else if (input == 'r') { // Desacelerar
       diminue = true;
@@ -96,7 +95,7 @@ void loop()
   if (zeroCrossDetected) 
   {
     zeroCrossDetected = false;
-    
+    Serial.println(posicao);
     unsigned long currentTime = millis();
     if (currentTime - lastUpdate >= updateInterval) {
       lastUpdate = currentTime;
