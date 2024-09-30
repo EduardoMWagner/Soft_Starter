@@ -6,6 +6,7 @@ const int zeroCrossPin = 34;  // Pino para o detector de cruzamento de zero
 const int bypassPin = 19;     // Pino para o bypass
 const int emergencyPin = 18;  // Pino para o relé de emergência
 const int led = 21;
+const int adcPin = 32;        // Pino ADC para medição
 volatile bool zeroCrossDetected = false;
 
 int estado = 1;
@@ -15,6 +16,9 @@ int accelTime = 5;             // Tempo de aceleração em segundos
 int decelTime = 5;             // Tempo de desaceleração em segundos
 bool accelerating = true;      // Indicador de fase (aceleração ou desaceleração)
 bool diminue = false;          // Indicador de desaceleração
+int adcValue = 0;  // Leitura do valor ADC no pino 32
+float voltage ;  // Converte para tensão (assumindo 3.3V como referência)
+bool ppmHabilitado = true;  // Controle se o sinal PPM está habilitado
 
 unsigned long lastUpdate = 0;  // Tempo da última atualização da posição
 const unsigned long updateInterval = 50; // Intervalo de atualização em milissegundos
@@ -32,6 +36,8 @@ void setup() {
   pinMode(zeroCrossPin, INPUT_PULLUP);
   pinMode(bypassPin, OUTPUT);
   pinMode(emergencyPin, OUTPUT);
+  pinMode(adcPin, INPUT); // Configuração do pino ADC para leitura analógica
+  pinMode(led, OUTPUT); // Configura o LED como saída
   
   // Inicializa os pinos em nível baixo (desligado)
   digitalWrite(bypassPin, LOW);
@@ -95,11 +101,10 @@ void loop()
   if (zeroCrossDetected) 
   {
     zeroCrossDetected = false;
-    Serial.println(posicao);
     unsigned long currentTime = millis();
     if (currentTime - lastUpdate >= updateInterval) {
       lastUpdate = currentTime;
-
+      
       // Controle de aceleração e desaceleração
       if (accelerating) {
         digitalWrite(emergencyPin, LOW);
@@ -119,10 +124,26 @@ void loop()
         }
       }
 
-      estado = 1;
+      // Verificar se a corrente está em 150% e desativar o sinal PPM temporariamente
+      if (voltage >= 1.44 && voltage < 1.67) // 150% da corrente nominal
+      {
+        Serial.println("Corrente a 150% - Desativando PPM");
+        ppmHabilitado = false;  // Desabilita o sinal PPM
+      } 
+      else if (voltage >= 1.67) // 200% da corrente nominal
+      {
+        Serial.println("Corrente a 200% - Desligando motor imediatamente");
+        digitalWrite(emergencyPin, HIGH);  // Desliga o motor
+      } 
+      else if (voltage < 1.44) // Corrente voltou abaixo de 150%, reabilitar PPM
+      {
+        Serial.println("Corrente normalizada - Reativando PPM");
+        ppmHabilitado = true;  // Reabilita o sinal PPM
+      }
     }
 
-    if (estado == 1) {
+    // Sinal PPM controlado pela variável ppmHabilitado
+    if (ppmHabilitado && estado == 1) {
       delayMicroseconds(posicao);
       
       digitalWrite(ppmPin, HIGH); // Pulso alto
@@ -133,4 +154,10 @@ void loop()
     } 
   } // Fechamento correto da verificação do cruzamento de zero
 
-} // Fechamento correto da função loop 
+  // Leitura do valor ADC no pino 32
+  adcValue = analogRead(adcPin);
+  voltage = (adcValue / 4095.0) * 3.3;  // Converte o valor ADC para tensão
+
+
+
+} // Fechamento correto da função loop
